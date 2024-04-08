@@ -1,4 +1,4 @@
-module github.com/yoppyDev/github-dependency-searcher
+module github.com/yoppyDev/gh-deps
 
 go 1.22.0
 

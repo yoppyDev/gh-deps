@@ -7,10 +7,10 @@ import (
 	"os"
 	"sort"
 
-	"github.com/yoppyDev/github-dependency-searcher/client"
 	"github.com/google/go-github/v32/github"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/yoppyDev/gh-deps/client"
 	"golang.org/x/oauth2"
 )
 
