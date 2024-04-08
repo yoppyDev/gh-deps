@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
+	"github.com/yoppyDev/github-dependency-searcher/client"
 	"github.com/google/go-github/v32/github"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -15,7 +17,6 @@ import (
 var (
 	library  string
 	language string
-	stars    string
 )
 
 func main() {
@@ -29,7 +30,6 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVarP(&library, "library", "l", "", "Library to search for (e.g. spf13/cobra)")
 	rootCmd.PersistentFlags().StringVarP(&language, "language", "L", "", "Language to search for (e.g. go)")
-	rootCmd.PersistentFlags().StringVarP(&stars, "stars", "s", "", "Stars condition (e.g. >=500, 10..20)")
 
 	viper.AutomaticEnv()
 
@@ -50,54 +50,28 @@ func run(cmd *cobra.Command, args []string) {
 		&oauth2.Token{AccessToken: token},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-
-	client := github.NewClient(tc)
-
-	starsQuery := ""
-	if stars != "" {
-		starsQuery = " stars:" + stars
-	}
+	c := github.NewClient(tc)
 
 	languageQuery := ""
 	if language != "" {
 		languageQuery = " language:" + language
 	}
 
-	query := fmt.Sprintf("\"%s\" in:file%s%s", library, starsQuery, languageQuery)
-	fmt.Println(query);
-	opts := &github.SearchOptions{Sort: "stars", Order: "desc"}
-
-	allRepos, err := all(client, ctx, query, opts)
+	query := fmt.Sprintf("\"%s\" %s", library, languageQuery)
+	result, _, err := c.Search.Code(ctx, query, &github.SearchOptions{})
 	if err != nil {
-		log.Fatalf("Error fetching repositories: %v", err)
+		log.Fatalf("Error searching code: %v", err)
 	}
 
-	fmt.Printf("Found %v repositories using %s with language %s and stars condition %s:\n", len(allRepos), library, language, stars)
-	for _, repo := range allRepos {
-		fmt.Printf("- %s (%s) - %d stars\n", *repo.FullName, *repo.HTMLURL, *repo.StargazersCount)
+	repos := client.FetchRepositoriesDetails(c, ctx, result.CodeResults)
+
+	// スター数に基づいてリポジトリをソート
+	sort.Slice(repos, func(i, j int) bool {
+		return repos[i].GetStargazersCount() > repos[j].GetStargazersCount()
+	})
+
+	// ソートされたリポジトリを出力
+	for _, repo := range repos {
+		fmt.Printf("- %s (%s) - %d stars\n", repo.GetFullName(), repo.GetHTMLURL(), repo.GetStargazersCount())
 	}
-}
-
-
-
-func all(client *github.Client, ctx context.Context, query string, opts *github.SearchOptions) ([]*github.Repository, error) {
-	var allRepos []*github.Repository
-	for {
-		repos, resp, err := client.Search.Repositories(ctx, query, opts)
-		if err != nil {
-			if _, ok := err.(*github.RateLimitError); ok {
-				log.Println("hit rate limit")
-				return nil, err
-			}
-			return nil, err
-		}
-
-		allRepos = append(allRepos, repos.Repositories...)
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
-	}
-
-	return allRepos, nil
 }
