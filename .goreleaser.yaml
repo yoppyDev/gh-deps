@@ -45,3 +45,9 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+
+brews:
+  - repository:
+      owner: yoppyDev
+      name: gh-deps
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
