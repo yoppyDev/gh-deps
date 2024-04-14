@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
-	"sort"
 
 	"github.com/google/go-github/v32/github"
 	"github.com/spf13/cobra"
@@ -16,7 +14,7 @@ import (
 
 var (
 	library  string
-	language string
+	path string
 )
 
 func main() {
@@ -28,13 +26,22 @@ func main() {
 		SilenceErrors: true,
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&library, "library", "l", "", "Library to search for (e.g. spf13/cobra)")
-	rootCmd.PersistentFlags().StringVarP(&language, "language", "L", "", "Language to search for (e.g. go)")
+	rootCmd.Flags().StringVarP(&library, "library", "l", "", "Library to search for (e.g. spf13/cobra)")
+	rootCmd.Flags().StringVarP(&path, "path", "p", "", "path to search for (e.g. **/**go.mod)")
+
+	if err := rootCmd.MarkFlagRequired("library"); err != nil {
+		fmt.Printf("Error marking library as required: %v\n", err)
+		os.Exit(1)
+	}
+	if err := rootCmd.MarkFlagRequired("path"); err != nil {
+		fmt.Printf("Error marking path as required: %v\n", err)
+		os.Exit(1)
+	}
 
 	viper.AutomaticEnv()
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
@@ -43,7 +50,8 @@ func run(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	token := viper.GetString("GITHUB_TOKEN")
 	if token == "" {
-		log.Fatal("GITHUB_TOKEN is not set in the environment variables")
+		fmt.Printf("GITHUB_TOKEN is not set in the environment variables")
+		return
 	}
 
 	ts := oauth2.StaticTokenSource(
@@ -52,26 +60,20 @@ func run(cmd *cobra.Command, args []string) {
 	tc := oauth2.NewClient(ctx, ts)
 	c := github.NewClient(tc)
 
-	languageQuery := ""
-	if language != "" {
-		languageQuery = " language:" + language
-	}
-
-	query := fmt.Sprintf("\"%s\" %s", library, languageQuery)
+	query := fmt.Sprintf("\"%s\" %s", library, path)
 	result, _, err := c.Search.Code(ctx, query, &github.SearchOptions{})
 	if err != nil {
-		log.Fatalf("Error searching code: %v", err)
+		fmt.Printf("Error searching code: %v\n", err)
+		return
 	}
 
 	repos := client.FetchRepositoriesDetails(c, ctx, result.CodeResults)
 
 	// スター数に基づいてリポジトリをソート
-	sort.Slice(repos, func(i, j int) bool {
-		return repos[i].GetStargazersCount() > repos[j].GetStargazersCount()
-	})
+	client.SortByStar(repos)
 
 	// ソートされたリポジトリを出力
 	for _, repo := range repos {
-		fmt.Printf("- %s (%s) - %d stars\n", repo.GetFullName(), repo.GetHTMLURL(), repo.GetStargazersCount())
+		fmt.Printf("- %s (%s) - %d stars\n", *repo.FullName, *repo.HTMLURL, *repo.StargazersCount)
 	}
 }
