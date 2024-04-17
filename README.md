@@ -18,7 +18,7 @@ export GITHUB_TOKEN=<your_github_token>
 gh-deps -l <library> -p <path>
 
 # Example
-gh-deps -l "spf13/cobra" -p "**/**go.mod"
+gh-deps -l "spf13/cobra" -p "go.mod"
 ```
 
 # Parameters
